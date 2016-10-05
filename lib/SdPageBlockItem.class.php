@@ -62,12 +62,6 @@ class SdPageBlockItem extends ArrayAccesseble {
     return !empty($this->r['data']['separateContent']);
   }
 
-  function isShow($ownPageId) {
-    if ($this->r['data']['ownPageId'] == $ownPageId) return true;
-    if ($this->hasSeparateContent()) return true;
-    return $this->isGlobal();
-  }
-
   function isGlobal() {
     return true;
   }

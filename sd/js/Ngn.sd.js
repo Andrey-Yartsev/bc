@@ -123,8 +123,16 @@ Ngn.sd.Font = new Class({
     }
   },
 
+  closeSettings: function() {
+    if (Ngn.sd.openedPropDialog) {
+      Ngn.sd.openedPropDialog.close();
+    }
+  },
+
   _settingsAction: function() {
-    if (Ngn.sd.currentEditBlock && Ngn.sd.currentEditBlock.id() == this.id()) return;
+    if (Ngn.sd.currentEditBlock && Ngn.sd.currentEditBlock.id() == this.id()) {
+      return;
+    }
     if (Ngn.sd.openedPropDialog) Ngn.sd.openedPropDialog.close();
     Ngn.sd.layersBar.setActive(this.id());
     this.toggleActive(true);
@@ -134,7 +142,6 @@ Ngn.sd.Font = new Class({
     Ngn.sd.currentEditBlock = this;
     if (!this.canEdit()) {
       if (Ngn.sd.openedPropDialog) {
-        console.debug('Ngn.sd.openedPropDialog: close');
         Ngn.sd.openedPropDialog.close();
       }
       return;
@@ -155,6 +162,7 @@ Ngn.sd.Font = new Class({
       force: false,
       url: this.ctrl + '/' + this.settingsAction + '/' + this.id(),
       onSubmitSuccess: function() {
+        window.fireEvent('sdBlockSaveComplete');
         this.reload();
       }.bind(this),
       onChangeFont: function(fontFamily) {
@@ -194,37 +202,12 @@ Ngn.sd.Font = new Class({
 
 });
 
-Ngn.sd.SettingsDialog = new Class({
-  Extends: Ngn.Dialog.RequestForm,
-
-  options: {
-    useFx: false
-  },
-
-  formInit: function() {
-    var obj = this;
-    var el = this.message.getElement('[name=fontFamily]');
-    if (el) {
-      el.addEvent('change', function() {
-        obj.fireEvent('changeFont', this.get('value'));
-      });
-      this.message.getElement('[name=fontSize]').addEvent('change', function() {
-        obj.fireEvent('changeSize', this.get('value'));
-      });
-      this.message.getElement('[name=color]').addEvent('change', function() {
-        obj.fireEvent('changeColor', this.get('value'));
-      });
-    }
-  }
-
-});
-
 Ngn.sd.Items = new Class({
 
   reload: function() {
     this.loading(true);
     new Ngn.Request.JSON({
-      url: this.ctrl + '/json_getItem/' + this.id() + '?ownPageId=' + Ngn.sd.ownPageId,
+      url: this.ctrl + '/json_getItem/' + this.id(),
       onComplete: function(data) {
         this.setData(data);
         this.updateElement();
@@ -298,7 +281,6 @@ Element.implement({
     var selector;
     var cls = this.get('class');
     if (cls) cls = cls.replace(/\s*dynamicStyles\s*/, '');
-
     if (this.hasClass('sdEl')) {
       if (subSelector) throw new Error('U can not use subSelector on .sdEl');
       selector = '.' + cls.replace(/(\s+)/g, '.');
@@ -312,12 +294,13 @@ Element.implement({
         selector += ' ' + (cls ? '.' + cls : this.get('tag'));
       }
     }
-    if (!value && value!==0) return;
+    if (!value && value !== 0 && value !== '') return;
     if (!subSelector && (property.test(new RegExp(Ngn.sd.directChangeStyleProperies, 'i')) || value.test(new RegExp(Ngn.sd.directChangeStyleValues, 'i')))) {
       if (!this.hasClass('dynamicStyles')) this.addClass('dynamicStyles');
       this.setStyle(property, value);
     }
-    Ngn.sd.addStyle(selector, property, value);
+    // remove <style> tag generation support
+    //Ngn.sd.addStyle(selector, property, value);
   },
   sdSetPosition: function(position) {
     return this.sdSetStyles(this.computePosition(position));
@@ -381,13 +364,13 @@ Ngn.sd.BlockAbstract = new Class({
     this._updateFont();
   },
   updateElement: function() {
+    this.el.set('data-id', this.id());
     this.updateFont();
     this.updateContainerHeight();
-    this.el.set('data-id', this.id());
     this.replaceContent();
     this.updateContent();
     this.updateSize();
-    Ngn.sd.interface.bars.layersBar.init();
+    if (Ngn.sd.interface.bars.layersBar) Ngn.sd.interface.bars.layersBar.init();
     window.fireEvent('resize');
   },
   eLastContainer: false,
@@ -397,7 +380,6 @@ Ngn.sd.BlockAbstract = new Class({
   container: function() {
     var eContainer = this._container();
     if (!eContainer && this.eLastContainer) return this.eLastContainer;
-    //if (!eContainer.hasClass('container')) throw new Error('Block has no container');
     return this.eLastContainer = eContainer;
   },
   inject: function(eContainer) {
@@ -416,9 +398,6 @@ Ngn.sd.BlockAbstract = new Class({
     this.el.sdSetPosition(this.data.position);
   },
   getDataForSave: function(create) {
-    this.data = Object.merge(this.data, {
-      ownPageId: Ngn.sd.ownPageId
-    });
     this.loading(true);
     // this._data.data - исходные изменяемые данные
     // this.data - текущие несохраненные данные
@@ -437,7 +416,7 @@ Ngn.sd.BlockAbstract = new Class({
   },
   save: function(create) {
     new Ngn.Request.JSON({
-      url: this.ctrl + '/json_' + (create ? 'create' : 'update') + '?ownPageId=' + Ngn.sd.ownPageId,
+      url: this.ctrl + '/json_' + (create ? 'create' : 'update'),
       onComplete: function(data) {
         this.setData(data);
         if (create) {
@@ -445,14 +424,16 @@ Ngn.sd.BlockAbstract = new Class({
           this.initElement(this.el);
         }
         this.updateElement();
-        this.creationEvent();
         this.loading(false);
         this._settingsAction();
+        window.fireEvent('sdBlockSaveComplete');
       }.bind(this)
     }).post(this.getDataForSave(create));
   },
-  creationEvent: function() {
-    Ngn.sd.interface.bars.layersBar.init();
+  update: function(data) {
+    this.setData(data);
+    this.updateElement();
+    this._settingsAction();
   },
   replaceContent: function() {
     //if (!this._data.html) return; this does not give save empty value
@@ -584,41 +565,37 @@ Ngn.sd.BlockB = new Class({
   styleEl: function() {
     return this.el.getElement('.cont');
   },
-  delete: function() {
+  init: function() {
+    if (this._data.id) Ngn.sd.blocks[this._data.id] = this;
+    this.updateElement();
+    this.initControls();
+    this.el.addEvent('click', function() {
+      this._settingsAction();
+    }.bind(this));
+  },
+  updateElement: function() {
+    this.initPosition();
+    this.updateOrder();
     this.parent();
-    var blockIds=this.getBlocksId();
-    if (blockIds.length!==1 && Ngn.sd.currentEditBlock.id() == this.id()) {
-      blockIds.splice(blockIds.indexOf(this._data.id), 1);
-      delete Ngn.sd.blocks[this._data.id];
-      Ngn.sd.blocks[ Math.max.apply({},blockIds) ]._settingsAction();
-    } else { delete Ngn.sd.blocks[this._data.id]; }
-    Ngn.sd.interface.bars.layersBar.init();
-    //this.updateContainerHeight();
   },
   initPosition: function() {
     this.el.sdSetPosition(this.data.position);
   },
-  getBlocksId: function() {
-    var blocksArr = [];
-    for (var i in Ngn.sd.blocks) {
-      blocksArr.push(i);
-    }
-    return blocksArr;
+  delete: function() {
+    this.parent();
+    this.closeSettings();
+    delete Ngn.sd.blocks[this._data.id];
+    //var blockIds = Ngn.sd.getBlockIds();
+    //if (blockIds.length !== 1 && Ngn.sd.currentEditBlock.id() == this.id()) {
+    //  blockIds.splice(blockIds.indexOf(this._data.id), 1);
+    //
+    //  Ngn.sd.blocks[Math.max.apply({}, blockIds)]._settingsAction();
+    //} else {
+    //  delete Ngn.sd.blocks[this._data.id];
+    //}
+    Ngn.sd.interface.bars.layersBar.init();
   },
-  init: function() {
-    if (this._data.id) Ngn.sd.blocks[this._data.id] = this;
-    this.initPosition();
-    this.updateOrder();
-    this.initControls();
-    this.initFont();
-    this.replaceContent();
-    this.updateContent();
-    this.updateSize();
-    this.el.addEvent('click', function() {
-      this._settingsAction();
-    }.bind(this));
-    // Ngn.sd.setMinHeight(eContainer);
-  }, // предназначено для изменения стилей внутренних элементов из данных блока
+  // предназначено для изменения стилей внутренних элементов из данных блока
   setToTheTop: function() {
     var minOrderKey = 1;
     for (var i in Ngn.sd.blocks) {
@@ -765,7 +742,7 @@ Ngn.sd.BlockB = new Class({
     //Ngn.sd.previewSwitch(true);
     var cls = this.editDialogClass();
     var options = Object.merge(Object.merge({
-      url: this.ctrl + '/json_edit/' + this._data.id + '?ownPageId=' + Ngn.sd.ownPageId,
+      url: this.ctrl + '/json_edit/' + this._data.id,
       dialogClass: 'settingsDialog dialog',
       title: 'Edit Content',
       width: 500,
@@ -798,7 +775,13 @@ Ngn.sd.BlockB = new Class({
 //    return; 
   },
   updateSize: function() {
-    if (!this.finalData().data.size) return;
+    if (!this.finalData().data.size) {
+      this.resizeEl({
+        w: '',
+        h: ''
+      });
+      return;
+    }
     this.resizeEl(this.finalData().data.size);
   },
   resize: function(size) {
@@ -816,8 +799,17 @@ Ngn.sd.BlockB = new Class({
     this._resizeEl(this.el.getElement('.cont'), size);
   },
   _resizeEl: function(el, size) {
-    if (size.w) el.sdSetStyle('width', size.w + 'px');
-    if (size.h) el.sdSetStyle('height', size.h + 'px');
+    if (size.w) {
+      el.sdSetStyle('width', size.w + 'px');
+    }
+    else if (size.w === '') {
+      el.sdSetStyle('width', '');
+    }
+    if (size.h) {
+      el.sdSetStyle('height', size.h + 'px');
+    } else if (size.h === '') {
+      el.sdSetStyle('height', '');
+    }
   },
   move: function(d) {
     var r = {
@@ -846,83 +838,8 @@ Ngn.sd.BlockB = new Class({
   }
 });
 
-Ngn.sd.BlockBMenu = new Class({
-  Extends: Ngn.sd.BlockB,
-  init: function() {
-    this.parent();
-  },
-  editDialogOptions: function() {
-    var obj = this;
-    return {
-      width: 250,
-      id: 'menu', //footer: false,
-      onFormResponse: function() {
-        this.form.addEvent('elHDistanceChange', function(value) {
-          obj.data.prop.hDistance = value;
-          obj.updateContent();
-        });
-        this.form.addEvent('elHDistanceChanged', function() {
-          obj.save();
-        });
-        this.form.addEvent('elHPaddingChange', function(value) {
-          obj.data.prop.hPadding = value;
-          obj.updateContent();
-        });
-        this.form.addEvent('elHPaddingChanged', function() {
-          obj.save();
-        });
-        this.form.addEvent('elVPaddingChange', function(value) {
-          obj.data.prop.vPadding = value;
-          obj.updateContent();
-        });
-        this.form.addEvent('elVPaddingChanged', function() {
-          obj.save();
-        });
-        this.form.eForm.getElement('[name=activeBgColor]').addEvent('change', function(color) {
-          obj.data.prop.activeBgColor = color.hex;
-          obj.updateContent();
-          //obj.save();
-        });
-      }
-    };
-  },
-  updateContent: function() {
-    if (!this.data.prop) this.data.prop = {};
-    if (this.data.prop.activeBgColor)
-      this.el.getElement('.cont').getElement('a.sel').sdSetStyle('background-color', this.data.prop.activeBgColor);
-    if (this.data.prop.overBgColor)
-      this.el.getElement('.cont').sdSetStyle('background-color', this.data.prop.overBgColor, 'a:hover');
-    this.el.getElement('.cont').sdSetStyle('margin-right', this.data.prop.hDistance + 'px', 'a');
-    this.el.getElement('.cont').sdSetStyle('padding-left', this.data.prop.hPadding + 'px', 'a');
-    this.el.getElement('.cont').sdSetStyle('padding-right', this.data.prop.hPadding + 'px', 'a');
-    this.el.getElement('.cont').sdSetStyle('padding-top', this.data.prop.vPadding + 'px', 'a');
-    this.el.getElement('.cont').sdSetStyle('padding-bottom', this.data.prop.vPadding + 'px', 'a');
-  },
-  _updateFont: function() {
-    this.parent();
-    this.updateLinkSelectedColor();
-  },
-  updateLinkSelectedColor: function() {
-    if (!this.data.font || !this.data.font.linkSelectedColor) return;
-    this.styleEl().sdSetStyle('color', this.data.font.linkSelectedColor, 'a.sel');
-  }
-});
 
-Ngn.sd.BlockBClone = new Class({
-  Extends: Ngn.sd.BlockB,
-  finalData: function() {
-    return Ngn.sd.blocks[this._data.data.refId]._data;
-  },
-  initCopyCloneBtn: function() {
-  },
-  initResize: function() {
-  },
-  getDataForSave: function(create) {
-    var p = this.parent(create);
-    if (p.data.data && p.data.data.size) delete p.data.data.size;
-    return p;
-  }
-});
+
 
 // factory
 Ngn.sd.block = function(el, data) {
@@ -930,6 +847,11 @@ Ngn.sd.block = function(el, data) {
   var o = eval(cls);
   cls = o || Ngn.sd.BlockB;
   return new cls(el, data);
+};
+
+// main creation block method
+Ngn.sd.createBlockDefault = function(data) {
+  Ngn.sd.block(Ngn.sd.elBlock().inject(Ngn.sd.eLayoutContent), data);
 };
 
 Ngn.sd.BlockDragAbstract = new Class({
@@ -1245,7 +1167,6 @@ Ngn.sd.exportLayout = function() {
   return eLayout.get('html');
 };
 
-Ngn.sd.ownPageId = 0;
 Ngn.sd.blockUserTypes = [];
 
 Ngn.sd.initUserTypes = function(types) {
@@ -1271,10 +1192,8 @@ Ngn.sd.loadData = function(ownPageId, onComplete) {
   onComplete = onComplete || function() {
   };
   $('layout1').set('html', '');
-  Ngn.sd.ownPageId = ownPageId;
   Ngn.Request.Iface.loading(true);
   Ngn.sd.blockContainers = {};
-  if (Ngn.sd.pagesSet) Ngn.sd.pagesSet.setActive(ownPageId);
   new Ngn.Request.JSON({
     url: '/cpanel/' + Ngn.sd.bannerId + '/json_get/?adminKey=' + Ngn.adminKey,
     onComplete: function(data) {
@@ -1287,7 +1206,7 @@ Ngn.sd.loadData = function(ownPageId, onComplete) {
       Ngn.sd.blocks = {};
       for (i = data.items.pageBlock.length - 1; i >= 0; i--) {
         v = data.items.pageBlock[i];
-        Ngn.sd.blocks[v.id] = Ngn.sd.block(Ngn.sd.elBlock().inject(Ngn.sd.eLayoutContent), v);
+        Ngn.sd.createBlockDefault(v);
       }
       Ngn.sd.eContentOverlayBorder = new Element('div', {'class': 'contentOverlayBorder'}).inject(Ngn.sd.eLayoutContent, 'top');
       new Element('div', {'class': 'contentOverlay contentOverlayLeft'}). //
@@ -1302,7 +1221,6 @@ Ngn.sd.loadData = function(ownPageId, onComplete) {
       Ngn.sd.setBannerSize(data.bannerSettings.size);
       Ngn.sd.updateLayoutContentHeight();
       Ngn.sd.updateOrderBar(data.items.pageBlock);
-      Ngn.sd.setPageTitle(ownPageId);
       Ngn.Request.Iface.loading(false);
       window.fireEvent('resize');
       onComplete(data);
@@ -1338,12 +1256,6 @@ Ngn.sd.PageBlocksShift = new Class({
       });
   }
 });
-
-Ngn.sd.pages = {};
-
-Ngn.sd.setPageTitle = function(n) {
-  if (Ngn.sd.pages[n]) $('pageTitle').set('html', Ngn.sd.pages[n]);
-};
 
 Ngn.sd.UserPanel = new Class({
   initialize: function(blockUserTypes) {
@@ -1523,6 +1435,9 @@ Ngn.sd.interface = {};
 
 Ngn.sd.init = function(bannerId) {
   Ngn.sd.bannerId = bannerId;
+  if (Ngn.sd.interface.bars) {
+    Ngn.sd.interface.bars.dispose();
+  }
   Ngn.sd.interface.bars = Ngn.sd.barsClass ? new Ngn.sd.barsClass() : new Ngn.sd.Bars();
   if (window.location.hash == '#preview') {
     Ngn.sd.previewSwitch();
@@ -1547,3 +1462,11 @@ Ngn.sd.updateContainerHeight = function(eContainer) {
 };
 
 Ngn.sd.initFullBodyHeight();
+
+Ngn.sd.getBlockIds = function() {
+  var ids = [];
+  for (var id in Ngn.sd.blocks) {
+    ids.push(id);
+  }
+  return ids;
+};

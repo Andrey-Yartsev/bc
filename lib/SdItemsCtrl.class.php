@@ -1,7 +1,7 @@
 <?php
 
 trait SdItemsCtrl {
-use ItemsCtrl;
+  use ItemsCtrl;
 
   protected function getParamActionN() {
     return 2;
@@ -15,7 +15,7 @@ use ItemsCtrl;
     $form = $this->bgSettingsForm();
     $data = [
       'dateUpdate' => time(),
-      'bg' => $url
+      'bg'         => $url
     ];
     foreach ($form->fields->fields as $k => $v) if (!empty($v['default'])) $default[$k] = $v['default'];
     if (isset($default)) $data = array_merge($data, [$form->settingsKey => $default]);

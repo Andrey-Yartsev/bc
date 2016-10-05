@@ -9,11 +9,9 @@ Ngn.sd.BlockBText = new Class({
   Extends: Ngn.sd.BlockBFont
 });
 
-
 window.addEvent('sdPanelComplete', function() {
   new Ngn.Btn(Ngn.sd.fbtn(Locale.get('Sd.addText'), 'text'), function() {
     var data = Ngn.sd.getBlockType('text');
-    console.debug(data);
     data.data.position = {
       x: 0,
       y: 0

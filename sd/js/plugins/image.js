@@ -6,8 +6,7 @@ window.addEvent('sdPanelComplete', function() {
         Ngn.Request.Iface.loading(true);
       }.bind(this),
       onComplete: function(v) {
-        var block = Ngn.sd.block(Ngn.sd.elBlock().inject(Ngn.sd.eLayoutContent), v);
-        block.creationEvent();
+        Ngn.sd.block(Ngn.sd.elBlock().inject(Ngn.sd.eLayoutContent), v);
         Ngn.Request.Iface.loading(false);
       }.bind(this)
     }

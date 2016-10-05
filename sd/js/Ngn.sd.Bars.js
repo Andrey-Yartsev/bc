@@ -14,11 +14,13 @@ Ngn.sd.Bars = new Class({
     Ngn.sd.eLayers = new Element('div', {'class': 'cont'}).inject($('layers'));
     Ngn.sd.loadData(pg ? pg[1] : 1, function(data) {
       this.layersBar = this.getLayersBar();
-
-      //
+      window.fireEvent('sdDataLoaded');
     }.bind(this));
     this.bindKeys();
     window.fireEvent('sdPanelComplete');
+  },
+  dispose: function() {
+    Ngn.sd.eLayers.dispose();
   },
   logoElement: function() {
     return new Element('a', {

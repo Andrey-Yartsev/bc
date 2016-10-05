@@ -11,7 +11,7 @@ class BcCore {
   }
 
   static function user() {
-    $id = Misc::checkEmpty(Auth::get('id'));
+    $id = Misc::checkEmpty(Auth::get('id'), 'authUserId');
     return [
       'id' => $id
     ];
@@ -44,12 +44,10 @@ class BcCore {
 
   static function copyBanner($bannerId, $userId = null, $bannerIdFrom) {
     // copy banner record
-    db()->selectRow("DELETE FROM bcBlocks WHERE bannerId=?d", $bannerIdFrom);
-    //$banner = db()->selectRow("SELECT * FROM bcBanners WHERE id=?d", $bannerId);
-    //$banner['dateUpdate'] = Date::db();
-    //unset($banner['id']);
+    db()->query("DELETE FROM bcBlocks WHERE bannerId=?d", $bannerIdFrom);
+    db()->query("DELETE FROM bcBlocks_undo_stack WHERE bannerId=?d", $bannerIdFrom);
+    db()->query("DELETE FROM bcBlocks_redo_stack WHERE bannerId=?d", $bannerIdFrom);
     if ($userId) $banner['userId'] = $userId;
-    //$newBannerId = db()->insert('bcBanners', $banner);
     // copy block records
     foreach (db()->query("SELECT * FROM bcBlocks WHERE bannerId=?d", $bannerId) as $v) {
         error_log("ghch".$v['bannerId'],0);

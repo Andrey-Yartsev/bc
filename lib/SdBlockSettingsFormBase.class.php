@@ -18,8 +18,22 @@ abstract class SdBlockSettingsFormBase extends Form {
 
   abstract protected function getInitFields();
 
+  protected function cleanUndoRedo() {
+    db()->query(<<<SQL
+INSERT INTO bcBlocks_undo_stack
+SELECT NULL, dateCreate, dateUpdate, orderKey, content, data, bannerId, userId,
+  "update" AS act,
+  id AS blockId
+FROM bcBlocks WHERE bcBlocks.id=?
+SQL
+      , $this->id);
+    db()->query('DELETE FROM bcBlocks_redo_stack WHERE bannerId=?', $this->id);
+  }
+
   protected function _update(array $data) {
     $this->items->update($this->id, ['font' => $data]);
+
+
   }
 
 }

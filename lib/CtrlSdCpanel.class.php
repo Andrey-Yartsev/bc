@@ -75,6 +75,8 @@ class CtrlSdCpanel extends CtrlBase {
     $this->json['pageTitle'] = $this->editPageTitle();
     $this->json['layout'] = SdCore::getLayout($this->req['ownPageId']);
     $this->json['bannerSettings']['size'] = BcCore::getSize($this->d['bannerId']);
+    $this->json['undoExists'] = (bool)db()->selectCell("SELECT COUNT(*) FROM bcBlocks_undo_stack WHERE bannerId=?", $this->d['bannerId']);
+    $this->json['redoExists'] = (bool)db()->selectCell("SELECT COUNT(*) FROM bcBlocks_redo_stack WHERE bannerId=?", $this->d['bannerId']);
   }
 
   protected function editPageTitle() {

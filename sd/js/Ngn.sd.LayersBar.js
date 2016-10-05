@@ -1,5 +1,6 @@
 Ngn.sd.LayersBar = new Class({
   initialize: function() {
+    //console.trace('initializing layers bar');
     this.init();
     Ngn.sd.layersBar = this;
   },
