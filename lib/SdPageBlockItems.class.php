@@ -226,7 +226,14 @@ SQL
     $lastUndoItem = $this->db->selectRow('SELECT * FROM bcBlocks_undo_stack WHERE bannerId=? ORDER BY id DESC LIMIT 1', $this->bannerId);
     if (!$lastUndoItem) return false;
     // ============================================
-    if ($lastUndoItem['act'] != 'delete') {
+    if ($lastUndoItem['act'] == 'order') {
+      $r['act'] = 'order';
+      $this->db->insert('bcBlocks_redo_stack', [
+        'bannerId' => $this->bannerId,
+        'act' => 'order',
+        'data' => serialize($this->getCurrentOrderState())
+      ]);
+    } elseif ($lastUndoItem['act'] != 'delete') {
       // for all actions excepting "delete" create redo item from existing block
       $r = $this->db->selectRow('SELECT * FROM bcBlocks WHERE id=?d', $lastUndoItem['blockId']);
       unset($r['id']);
@@ -243,7 +250,12 @@ SQL
     }
     // ============================================
     $this->db->query('DELETE FROM bcBlocks_undo_stack WHERE id=?', $lastUndoItem['id']);
-    if ($lastUndoItem['act'] == 'add') {
+    // ============================================
+    if ($lastUndoItem['act'] == 'order') {
+      $orderKeys = unserialize($lastUndoItem['data']);
+      $r['orderKeys'] = $orderKeys;
+      $this->_updateOrder($orderKeys);
+    } elseif ($lastUndoItem['act'] == 'add') {
       $this->db->query('DELETE FROM bcBlocks WHERE id=?', $lastUndoItem['blockId']);
     }
     else {
@@ -260,9 +272,9 @@ SQL
         $this->db->query('UPDATE bcBlocks SET orderKey=?, content=?, data=?, dateUpdate=? WHERE id=?', //
           $lastUndoItem['orderKey'], $lastUndoItem['content'], $lastUndoItem['data'], $lastUndoItem['dateUpdate'], $lastUndoItem['blockId']);
       }
-      //die2('-');
       $r = $this->getItemF($blockId);
       $r['act'] = $lastUndoItem['act'];
+      $r['blockId'] = $blockId;
     }
     $r['lastItem'] = !(bool)$this->db->selectCell('SELECT COUNT(*) FROM bcBlocks_undo_stack WHERE bannerId=?', $this->bannerId);
     return $r;
@@ -272,7 +284,7 @@ SQL
     $lastRedoItem = $this->db->selectRow('SELECT * FROM bcBlocks_redo_stack WHERE bannerId=? ORDER BY id DESC LIMIT 1', $this->bannerId);
     if (!count($lastRedoItem)) return false;
     $lastRedoItemId = $lastRedoItem['id'];
-    if ($lastRedoItem['act'] == 'add') {
+    if ($lastRedoItem['act'] == 'add' or $lastRedoItem['act'] == 'order') {
       unset($lastRedoItem['id']);
       $this->db->insert('bcBlocks_undo_stack', $lastRedoItem);
     } else {
@@ -284,17 +296,20 @@ SELECT NULL, dateCreate, dateUpdate, orderKey, content, data, bannerId, userId,
 FROM bcBlocks WHERE id=?d
 SQL
         , $lastRedoItem['blockId']);
-
     }
-
     if ($lastRedoItem['act'] == 'delete') {
       $r = [];
       $r['id'] = $lastRedoItem['blockId'];
       $r['act'] = $lastRedoItem['act'];
-
       $this->db->query('DELETE FROM bcBlocks WHERE id=?d', $lastRedoItem['blockId']);
     }
-    else {
+    elseif ($lastRedoItem['act'] == 'order') {
+      $orderKeys = unserialize($lastRedoItem['data']);
+      $this->_updateOrder($orderKeys);
+      $r = [];
+      $r['act'] = 'order';
+      $r['orderKeys'] = $orderKeys;
+    } else {
       $blockId = $lastRedoItem['blockId'];
       $act = $lastRedoItem['act'];
       if ($lastRedoItem['act'] == 'add') {
@@ -305,8 +320,11 @@ SQL
       }
       else {
         // act = update
-        $this->db->query('UPDATE bcBlocks SET orderKey=?, content=?, data=?, dateUpdate=?', //
-          $lastRedoItem['orderKey'], $lastRedoItem['content'], $lastRedoItem['data'], $lastRedoItem['dateUpdate'], $lastRedoItem['blockId']);
+        $lastRedoBlockId = $lastRedoItem['blockId'];
+        unset($lastRedoItem['id']);
+        unset($lastRedoItem['blockId']);
+        unset($lastRedoItem['act']);
+        $this->db->update('bcBlocks', $lastRedoBlockId, $lastRedoItem);
       }
       $r = $this->getItemF($blockId);
       $r['act'] = $act;
@@ -314,6 +332,24 @@ SQL
     $this->db->query('DELETE FROM bcBlocks_redo_stack WHERE id=?', $lastRedoItemId);
     $r['lastItem'] = !(bool)$this->db->selectCell('SELECT COUNT(*) FROM bcBlocks_redo_stack WHERE bannerId=?', $this->bannerId);
     return $r;
+  }
+
+  protected function getCurrentOrderState() {
+    return db()->selectCol("SELECT id AS ARRAY_KEY, orderKey FROM bcBlocks WHERE bannerId=?d", $this->bannerId);
+  }
+
+  function updateOrder(array $blockIdToOrderKey) {
+    db()->insert('bcBlocks_undo_stack', [
+      'act' => 'order',
+      'data' => serialize($this->getCurrentOrderState()),
+      'bannerId' => $this->bannerId
+    ]);
+  }
+
+  protected function _updateOrder(array $blockIdToOrderKey) {
+    foreach ($blockIdToOrderKey as $blockId => $orderKey) {
+      db()->query("UPDATE bcBlocks SET orderKey=?d WHERE id=?d", $orderKey, $blockId);
+    }
   }
 
 }

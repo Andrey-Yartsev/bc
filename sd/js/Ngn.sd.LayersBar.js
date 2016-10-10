@@ -19,12 +19,14 @@ Ngn.sd.LayersBar = new Class({
       title: Locale.get('Sd.layersQuestionMark'),
       'class': 'questionMark'
     }).inject(eTitle));
-    Ngn.sd.sortBySubKey(Ngn.sd.blocks, '_data', 'orderKey').each(function(item) {
-      this.items[item._data.id] = new Ngn.sd.LayersBar.Item(this, item);
-    }.bind(this));
+    this.buildItems();
     if (this.currentActiveId) {
       this.setActive(this.currentActiveId);
     }
+    this.initSortables();
+  },
+  initSortables: function() {
+    var obj = this;
     new Sortables(this.eLayers, {
       onStart: function(eMovingLayer) {
         eMovingLayer.addClass('drag');
@@ -48,9 +50,7 @@ Ngn.sd.LayersBar = new Class({
         var ids = this.serialize(0, function(element) {
           return element.get('data-id');
         });
-        for (var i = 0; i < ids.length; i++) {
-          Ngn.sd.blocks[ids[i]].updateOrder(i);
-        }
+        obj.updateOrder(obj.flip(ids));
         new Ngn.Request({
           url: '/pageBlock/' + Ngn.sd.bannerId + '/json_updateOrder'
         }).post({
@@ -58,6 +58,20 @@ Ngn.sd.LayersBar = new Class({
           });
       }
     });
+  },
+  flip: function(trans) {
+    var key, arr = {};
+    for (key in trans) {
+      if (trans.hasOwnProperty(key)) {
+        arr[trans[key]] = key;
+      }
+    }
+    return arr;
+  },
+  buildItems: function() {
+    Ngn.sd.sortBySubKey(Ngn.sd.blocks, '_data', 'orderKey').each(function(item) {
+      this.items[item._data.id] = new Ngn.sd.LayersBar.Item(this, item);
+    }.bind(this));
   },
   getTitle: function(item) {
     if (item.data.subType == 'image') {
@@ -78,6 +92,29 @@ Ngn.sd.LayersBar = new Class({
     }
     this.items[blockId].setActive(true);
     this.currentActiveId = blockId;
+  },
+  reorder: function(blockIds) {
+    this.updateOrder(blockIds);
+    //this.outputOrder();
+    this.eLayers.set('html', '');
+    this.buildItems();
+    this.initSortables();
+  },
+  updateOrder: function(blockIds) {
+    if (!blockIds) throw new Error('blockIds is fucking up');
+    console.debug(blockIds);
+    this.outputOrder();
+    for (var id in blockIds) {
+      if (!Ngn.sd.blocks[id]) throw new Error('block id=' + id + ' does not exists');
+      Ngn.sd.blocks[id].updateOrder(blockIds[id]);
+    }
+  },
+  outputOrder: function() {
+    var s = '';
+    for (var i in Ngn.sd.blocks) {
+      s += i + ': ' + Ngn.sd.blocks[i]._data.orderKey + '; ';
+    }
+    console.log(s);
   }
 });
 

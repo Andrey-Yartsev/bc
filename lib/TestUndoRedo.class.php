@@ -41,93 +41,110 @@ class TestUndoRedo extends ProjectTestCase {
     ]);
   }
 
-  function testCreateUndo() {
-    $id = $this->create();
-    $this->assertAct($id, 'undo', 'add');
-    $this->blocks->undo();
-    $this->assertAct($id, 'redo', 'add');
-    $this->assertFalse((bool)db()->selectRow("SELECT * FROM bcBlocks WHERE id=$id"));
-  }
+//  function testCreateUndo() {
+//    $id = $this->create();
+//    $this->assertAct($id, 'undo', 'add');
+//    $this->blocks->undo();
+//    $this->assertAct($id, 'redo', 'add');
+//    $this->assertFalse((bool)db()->selectRow("SELECT * FROM bcBlocks WHERE id=$id"));
+//  }
+//
+//  function testCreateUndoRedo() {
+//    $id = $this->create();
+//    $this->blocks->undo();
+//    $this->blocks->redo();
+//    $this->assertTrue((bool)db()->selectRow("SELECT * FROM bcBlocks WHERE id=$id"));
+//    $this->assertTrue((bool)db()->selectRow("SELECT * FROM bcBlocks_undo_stack WHERE blockId=$id"));
+//  }
+//
+//  function testUpdateAndCheckUndo() {
+//    $id = $this->create();
+//    $this->blocks->update($id, ['font' => ['text' => ['1']]]);
+//    $this->assertAct($id, 'undo', 'update');
+//  }
+//
+//  function testUpdateUndo() {
+//    $id = $this->create();
+//    $this->blocks->update($id, ['font' => ['text' => ['1']]]);
+//    $this->blocks->undo();
+//    $this->assertTrue(empty($this->blocks->getItemF($id)['data']['font']));
+//  }
+//
+//  function testUpdateUndoRedo() {
+//    $id = $this->create();
+//    $this->blocks->update($id, ['font' => ['text' => ['1']]]);
+//    $this->blocks->undo();
+//    $this->blocks->redo();
+//    $this->assertFalse($this->blocks->getItemF($id)['data']['font']['text'] == 1);
+//  }
+//
+//  function testUpdateUndoRedoUndo() {
+//    $id = $this->create();
+//    $this->blocks->update($id, ['font' => ['text' => ['1']]]);
+//    $this->blocks->undo();
+//    $this->blocks->redo();
+//    $this->blocks->undo();
+//    $this->assertTrue(empty($this->blocks->getItemF($id)['data']['font']));
+//  }
+//
+//  function testUpdateUndoRedoUndoRedo() {
+//    $id = $this->create();
+//    $this->blocks->update($id, ['font' => ['text' => ['1']]]);
+//    $this->blocks->undo();
+//    $this->blocks->redo();
+//    $this->blocks->undo();
+//    $this->blocks->redo();
+//    $this->assertFalse($this->blocks->getItemF($id)['data']['font']['text'] == 1);
+//  }
+//
+//  function testDeleteUndoRedo() {
+//    $id = $this->create();
+//    $this->blocks->delete($id);
+//    $this->assertAct($id, 'undo', 'delete');
+//    $this->blocks->undo();
+//    $this->assertAct($id, 'redo', 'delete');
+//    $this->assertTrue((bool)$this->blocks->getItemF($id), 'item exists');
+//    $this->blocks->redo();
+//    $this->assertFalse((bool)db()->selectRow('SELECT * FROM bcBlocks WHERE id=?d', $id), 'delete on redo');
+//  }
+//
+//  function testDeleteUndoRedoUndo() {
+//    $id = $this->create();
+//    $this->blocks->delete($id);
+//    $this->assertAct($id, 'undo', 'delete');
+//    $this->blocks->undo();
+//    $this->assertAct($id, 'redo', 'delete');
+//    $this->blocks->redo();
+//    $this->assertAct($id, 'undo', 'delete');
+//    $this->blocks->undo(true);
+//    $this->assertTrue((bool)$this->blocks->getItemF($id), 'item exists');
+//  }
+//
+//  function testDeleteCreateUndoUndo() {
+//    $id = $this->create();
+//    $this->blocks->delete($id);
+//    $id2 = $this->create();
+//    $this->blocks->undo();
+//    $this->blocks->undo();
+//    $this->assertFalse((bool)db()->selectRow('SELECT * FROM bcBlocks WHERE id=?d', $id2), 'item exists');
+//    $this->assertTrue((bool)db()->selectRow('SELECT * FROM bcBlocks WHERE id=?d', $id), 'item exists');
+//  }
 
-  function testCreateUndoRedo() {
-    $id = $this->create();
-    $this->blocks->undo();
-    $this->blocks->redo();
-    $this->assertTrue((bool)db()->selectRow("SELECT * FROM bcBlocks WHERE id=$id"));
-    $this->assertTrue((bool)db()->selectRow("SELECT * FROM bcBlocks_undo_stack WHERE blockId=$id"));
-  }
-
-  function testUpdateAndCheckUndo() {
-    $id = $this->create();
-    $this->blocks->update($id, ['font' => ['text' => ['1']]]);
-    $this->assertAct($id, 'undo', 'update');
-  }
-
-  function testUpdateUndo() {
-    $id = $this->create();
-    $this->blocks->update($id, ['font' => ['text' => ['1']]]);
-    $this->blocks->undo();
-    $this->assertTrue(empty($this->blocks->getItemF($id)['data']['font']));
-  }
-
-  function testUpdateUndoRedo() {
-    $id = $this->create();
-    $this->blocks->update($id, ['font' => ['text' => ['1']]]);
-    $this->blocks->undo();
-    $this->blocks->redo();
-    $this->assertFalse($this->blocks->getItemF($id)['data']['font']['text'] == 1);
-  }
-
-  function testUpdateUndoRedoUndo() {
-    $id = $this->create();
-    $this->blocks->update($id, ['font' => ['text' => ['1']]]);
-    $this->blocks->undo();
-    $this->blocks->redo();
-    $this->blocks->undo();
-    $this->assertTrue(empty($this->blocks->getItemF($id)['data']['font']));
-  }
-
-  function testUpdateUndoRedoUndoRedo() {
-    $id = $this->create();
-    $this->blocks->update($id, ['font' => ['text' => ['1']]]);
-    $this->blocks->undo();
-    $this->blocks->redo();
-    $this->blocks->undo();
-    $this->blocks->redo();
-    $this->assertFalse($this->blocks->getItemF($id)['data']['font']['text'] == 1);
-  }
-
-  function testDeleteUndoRedo() {
-    $id = $this->create();
-    $this->blocks->delete($id);
-    $this->assertAct($id, 'undo', 'delete');
-    $this->blocks->undo();
-    $this->assertAct($id, 'redo', 'delete');
-    $this->assertTrue((bool)$this->blocks->getItemF($id), 'item exists');
-    $this->blocks->redo();
-    $this->assertFalse((bool)db()->selectRow('SELECT * FROM bcBlocks WHERE id=?d', $id), 'delete on redo');
-  }
-
-  function testDeleteUndoRedoUndo() {
-    $id = $this->create();
-    $this->blocks->delete($id);
-    $this->assertAct($id, 'undo', 'delete');
-    $this->blocks->undo();
-    $this->assertAct($id, 'redo', 'delete');
-    $this->blocks->redo();
-    $this->assertAct($id, 'undo', 'delete');
-    $this->blocks->undo(true);
-    $this->assertTrue((bool)$this->blocks->getItemF($id), 'item exists');
-  }
-
-  function testDeleteCreateUndoUndo() {
-    $id = $this->create();
-    $this->blocks->delete($id);
+  function testOrderUndoRedo() {
+    $id1 = $this->create();
     $id2 = $this->create();
+    $r1 = db()->selectCol("SELECT id AS ARRAY_KEY, orderKey FROM bcBlocks WHERE id IN ($id1, $id2)");
+    $newOrder = [
+      $id1 => '1',
+      $id2 => '2'
+    ];
+    $this->blocks->updateOrder($newOrder);
     $this->blocks->undo();
-    $this->blocks->undo();
-    $this->assertFalse((bool)db()->selectRow('SELECT * FROM bcBlocks WHERE id=?d', $id2), 'item exists');
-    $this->assertTrue((bool)db()->selectRow('SELECT * FROM bcBlocks WHERE id=?d', $id), 'item exists');
+    $r2 = db()->selectCol("SELECT id AS ARRAY_KEY, orderKey FROM bcBlocks WHERE id IN ($id1, $id2)");
+    $this->assertTrue($r1 === $r2);
+    $this->blocks->redo();
+    $r2 = db()->selectCol("SELECT id AS ARRAY_KEY, orderKey FROM bcBlocks WHERE id IN ($id1, $id2)");
+    $this->assertTrue($r2 === $newOrder);
   }
 
 //  function testUpdateImages() {

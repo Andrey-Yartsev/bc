@@ -11,12 +11,19 @@ window.addEvent('sdPanelComplete', function() {
         var act = data.act;
         delete data.act;
         if (act) {
-          var obj = Ngn.sd.blocks[data.blockId];
-          if (act == 'add') {
-            obj.delete();
-            delete obj;
-          } else if (act == 'update') {
-            obj.update(data);
+          if (act == 'add' || act == 'update') {
+            if (!Ngn.sd.blocks[data.blockId]) {
+              throw new Error('There is no block with id ' + data.blockId + ' on ' + act + ' action');
+            }
+            var obj = Ngn.sd.blocks[data.blockId];
+            if (act == 'add') {
+              obj.delete();
+              delete obj;
+            } else {
+              obj.update(data);
+            }
+          } else if (act == 'order') {
+            Ngn.sd.interface.bars.layersBar.reorder(data.orderKeys);
           } else {
             Ngn.sd.init(Ngn.sd.bannerId);
           }
@@ -26,6 +33,7 @@ window.addEvent('sdPanelComplete', function() {
         } else {
           Ngn.sd.btnUndo.toggleDisabled(false);
         }
+        Ngn.sd.btnRedo.toggleDisabled(true);
       }
     }).post();
   });
@@ -51,6 +59,8 @@ window.addEvent('sdPanelComplete', function() {
             delete obj;
           } else if (act == 'update') {
             obj.update(data, false);
+          } else if (act == 'order') {
+            Ngn.sd.interface.bars.layersBar.reorder(data.orderKeys);
           } else {
             // act = delete
             Ngn.sd.createBlockDefault(data);
@@ -73,6 +83,11 @@ window.addEvent('sdDataLoaded', function() {
 });
 
 window.addEvent('sdBlockSaveComplete', function() {
+  Ngn.sd.btnUndo.toggleDisabled(true);
+  Ngn.sd.btnRedo.toggleDisabled(false);
+});
+
+window.addEvent('sdBlockOrderChanged', function() {
   Ngn.sd.btnUndo.toggleDisabled(true);
   Ngn.sd.btnRedo.toggleDisabled(false);
 });

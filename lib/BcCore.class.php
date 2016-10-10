@@ -60,7 +60,7 @@ class BcCore {
     // copy files
     $path = BcCore::getPath($bannerId);
     $newPath = preg_replace('/\/\d+\./', '/'.$bannerIdFrom.'.', BcCore::getPath($bannerId));
-    unlink(UPLOAD_PATH.$newPath);
+    File::delete(UPLOAD_PATH.$newPath);
     copy(UPLOAD_PATH.$path, UPLOAD_PATH.$newPath);
     return $bannerIdFrom;
   }

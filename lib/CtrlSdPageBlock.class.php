@@ -142,9 +142,7 @@ class CtrlSdPageBlock extends CtrlCommon {
   }
 
   function action_json_updateOrder() {
-    foreach (array_flip($this->req['ids']) as $blockId => $orderKey) {
-      db()->query("UPDATE bcBlocks SET orderKey=?d WHERE id=?d", $orderKey, $blockId);
-    }
+    $this->items()->updateOrder(array_flip($this->req['ids']));
   }
 
   function action_json_undo() {
