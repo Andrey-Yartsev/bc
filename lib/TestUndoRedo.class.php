@@ -13,7 +13,7 @@ class TestUndoRedo extends ProjectTestCase {
 
   protected function assertAct($blockId, $type, $act) {
     $r = db()->selectRow('SELECT * FROM bcBlocks_'.$type.'_stack WHERE blockId=?d ORDER BY id DESC LIMIT 1', $blockId);
-    $this->assertTrue($r['act'] === $act, "$type $act  act");
+    $this->assertTrue($r['act'] === $act, "$type: act={$r['act']}, expecting $act");
   }
 
   protected function setUp() {
@@ -129,32 +129,104 @@ class TestUndoRedo extends ProjectTestCase {
 //    $this->assertFalse((bool)db()->selectRow('SELECT * FROM bcBlocks WHERE id=?d', $id2), 'item exists');
 //    $this->assertTrue((bool)db()->selectRow('SELECT * FROM bcBlocks WHERE id=?d', $id), 'item exists');
 //  }
-
-  function testOrderUndoRedo() {
-    $id1 = $this->create();
-    $id2 = $this->create();
-    $r1 = db()->selectCol("SELECT id AS ARRAY_KEY, orderKey FROM bcBlocks WHERE id IN ($id1, $id2)");
-    $newOrder = [
-      $id1 => '1',
-      $id2 => '2'
-    ];
-    $this->blocks->updateOrder($newOrder);
-    $this->blocks->undo();
-    $r2 = db()->selectCol("SELECT id AS ARRAY_KEY, orderKey FROM bcBlocks WHERE id IN ($id1, $id2)");
-    $this->assertTrue($r1 === $r2);
-    $this->blocks->redo();
-    $r2 = db()->selectCol("SELECT id AS ARRAY_KEY, orderKey FROM bcBlocks WHERE id IN ($id1, $id2)");
-    $this->assertTrue($r2 === $newOrder);
-  }
-
-//  function testUpdateImages() {
-//    $id = $this->create();
-//    $fs1 = filesize(__DIR__.'/test.png');
-//    //$fs2 = filesize(__DIR__.'/test2.png');
-//    $this->blocks->updateMultiImages($id, 0, __DIR__.'/test.png');
-//    $r = $this->blocks->updateMultiImages($id, 0, __DIR__.'/test2.png');
-//         $this->blocks->undo();
-//    $this->assertTrue(filesize(WEBROOT_PATH.$r[0]) === $fs1);
+//
+//  function testOrderUndoRedo() {
+//    $id1 = $this->create();
+//    $id2 = $this->create();
+//    $r1 = db()->selectCol("SELECT id AS ARRAY_KEY, orderKey FROM bcBlocks WHERE id IN ($id1, $id2)");
+//    $newOrder = [
+//      $id1 => '1',
+//      $id2 => '2'
+//    ];
+//    $this->blocks->updateOrder($newOrder);
+//    $this->blocks->undo();
+//    $r2 = db()->selectCol("SELECT id AS ARRAY_KEY, orderKey FROM bcBlocks WHERE id IN ($id1, $id2)");
+//    $this->assertTrue($r1 === $r2);
+//    $this->blocks->redo();
+//    $r2 = db()->selectCol("SELECT id AS ARRAY_KEY, orderKey FROM bcBlocks WHERE id IN ($id1, $id2)");
+//    $this->assertTrue($r2 === $newOrder);
 //  }
+
+  function testUpdateImages() {
+    $id = $this->create();
+    $fs1 = filesize(__DIR__.'/test.png');
+    $fs2 = filesize(__DIR__.'/test2.png');
+    $this->blocks->updateMultiImages($id, 0, __DIR__.'/test.png');
+
+    $lastUndo = db()->selectRow('SELECT * FROM bcBlocks_undo_stack WHERE blockId=?d ORDER BY id DESC LIMIT 1', $id);
+    $data = unserialize($lastUndo['data']);
+    $this->assertTrue(
+      empty($data['images']),
+      'undo last item has empty images data'
+    );
+    $this->assertFalse(
+      (bool)glob($this->blocks->undoImagesFolder($lastUndo['id']).'/*'),
+      'no images in last undo item folder'
+    );
+
+    $r = $this->blocks->updateMultiImages($id, 0, __DIR__.'/test2.png');
+    $lastUndo = db()->selectRow('SELECT * FROM bcBlocks_undo_stack WHERE blockId=?d ORDER BY id DESC LIMIT 1', $id);
+    $this->assertTrue(
+      filesize(glob($this->blocks->undoImagesFolder($lastUndo['id']).'/*')[0]) == $fs1,
+      'images in undo folder has the size of first update image'
+    );
+
+    $this->blocks->undo();
+    $this->assertTrue(
+      filesize(WEBROOT_PATH.$r[0]) == $fs1,
+      'image reverted after undo'
+    );
+
+    $lastRedo = db()->selectRow('SELECT * FROM bcBlocks_redo_stack WHERE blockId=?d ORDER BY id DESC LIMIT 1', $id);
+    $this->assertTrue(
+      filesize(glob($this->blocks->redoImagesFolder($lastRedo['id']).'/*')[0]) == $fs2,
+      'redo stack has image from previous update'
+    );
+
+    // make redo
+    $this->blocks->redo();
+    $this->assertTrue(
+      filesize(WEBROOT_PATH.$r[0]) == $fs2,
+      'second image placed in block images folder after redo'
+    );
+
+    $this->blocks->undo();
+    $this->assertTrue(
+      filesize(WEBROOT_PATH.$r[0]) == $fs1,
+      'first image placed in block images folder after redo'
+    );
+
+    $this->blocks->redo();
+    $this->assertTrue(
+      filesize(WEBROOT_PATH.$r[0]) == $fs2,
+      'second image placed in block images folder after repeated redo'
+    );
+
+    $this->blocks->delete($id);
+    $lastUndo = db()->selectRow('SELECT * FROM bcBlocks_undo_stack WHERE blockId=?d ORDER BY id DESC LIMIT 1', $id);
+    $file = glob($this->blocks->undoImagesFolder($lastUndo['id']).'/*')[0];
+    $this->assertTrue(
+      filesize($file) == $fs2,
+      'file exists in undo folder after block was deleted'
+    );
+
+    $this->blocks->undo();
+    $this->assertTrue(
+      filesize(WEBROOT_PATH.$r[0]) == $fs2,
+      'image exists after deletion undo'
+    );
+
+    $this->assertFalse(
+      file_exists($file),
+      'undo folder is empty'
+    );
+
+    $this->blocks->redo();
+    $lastUndo = db()->selectRow('SELECT * FROM bcBlocks_undo_stack WHERE blockId=?d ORDER BY id DESC LIMIT 1', $id);
+    $this->assertTrue(
+      file_exists(glob($this->blocks->undoImagesFolder($lastUndo['id']).'/*')[0]),
+      'image exists in undo folder after deletion redo'
+    );
+  }
 
 }

@@ -41,14 +41,13 @@ class SdPageBlockItems extends SdContainerItems {
     $data['bannerId'] = $this->bannerId;
     $data['orderKey'] = $orderKey;
     $blockId = parent::create($data);
-    $this->db->query(<<<SQL
-INSERT INTO bcBlocks_undo_stack
-SELECT NULL, dateCreate, dateUpdate, orderKey, content, data, bannerId, userId,
-  "add" AS act,
-  id AS blockId
-FROM bcBlocks WHERE bcBlocks.id=$blockId
-SQL
-    );
+
+    $r = db()->selectRow('SELECT * FROM bcBlocks WHERE id=?d', $blockId);
+    $r['blockId'] = $r['id'];
+    $r['act'] = 'add';
+    unset($r['id']);
+    db()->insert('bcBlocks_undo_stack', $r);
+
     $this->db->query('DELETE FROM bcBlocks_redo_stack WHERE bannerId=?', $this->bannerId);
     return $blockId;
   }
@@ -78,16 +77,19 @@ SQL
     return false;
   }
 
+  protected $undoId;
+
   function update($id, array $data) {
-    if (!$this->dataHasChanged($id, $data)) return;
-    db()->query(<<<SQL
-INSERT INTO bcBlocks_undo_stack
-SELECT NULL, dateCreate, dateUpdate, orderKey, content, data, bannerId, userId,
-  "update" AS act,
-  id AS blockId
-FROM bcBlocks WHERE bcBlocks.id=?
-SQL
-      , $id);
+    if (empty($data['images']) and !$this->dataHasChanged($id, $data)) return;
+    $r = $this->getItem($id);
+    $r2 = $r->r;
+    $r2['data'] = serialize($r2['data']);
+    $r2['act'] = 'update';
+    $r2['blockId'] = $r2['id'];
+    unset($r2['id']);
+    LogWriter::v('undo', "add undo to stack $id");
+
+    $this->undoId = db()->insert('bcBlocks_undo_stack', $r2);
     db()->query('DELETE FROM bcBlocks_redo_stack WHERE bannerId=?', $this->bannerId);
     $this->_update($id, $data);
   }
@@ -209,17 +211,16 @@ SQL
   }
 
   function delete($id) {
-    db()->query(<<<SQL
-INSERT INTO bcBlocks_undo_stack
-SELECT NULL, dateCreate, dateUpdate, orderKey, content, data, bannerId, userId,
-  "delete" AS act,
-  id AS blockId
-FROM bcBlocks WHERE bcBlocks.id=?
-SQL
-      , $id);
+    $r = db()->selectRow('SELECT * FROM bcBlocks WHERE id=?d', $id);
+    $r['blockId'] = $r['id'];
+    $r['act'] = 'delete';
+    unset($r['id']);
+    $undoId = db()->insert('bcBlocks_undo_stack', $r);
+    if (file_exists($this->imagesFolder($id))) {
+      Dir::move($this->imagesFolder($id), $this->undoImagesFolder($undoId));
+    }
     $this->db->query("DELETE FROM bcBlocks_redo_stack WHERE bannerId=?", $id);
     parent::delete($id);
-    Dir::remove(UPLOAD_PATH.'/'.$this->name.'/multi/'.$id);
   }
 
   function undo() {
@@ -230,23 +231,29 @@ SQL
       $r['act'] = 'order';
       $this->db->insert('bcBlocks_redo_stack', [
         'bannerId' => $this->bannerId,
-        'act' => 'order',
-        'data' => serialize($this->getCurrentOrderState())
+        'act'      => 'order',
+        'data'     => serialize($this->getCurrentOrderState())
       ]);
-    } elseif ($lastUndoItem['act'] != 'delete') {
+    }
+    elseif ($lastUndoItem['act'] != 'delete') {
       // for all actions excepting "delete" create redo item from existing block
       $r = $this->db->selectRow('SELECT * FROM bcBlocks WHERE id=?d', $lastUndoItem['blockId']);
       unset($r['id']);
       $r['act'] = $lastUndoItem['act'];
       $r['blockId'] = $lastUndoItem['blockId'];
-      $this->db->insert('bcBlocks_redo_stack', $r);
-    } else {
-      // for "delete" create empty item
+      $redoId = $this->db->insert('bcBlocks_redo_stack', $r);
+    }
+    else {
+      // for "delete" act create empty item
       $this->db->insert('bcBlocks_redo_stack', [
-        'act' => 'delete',
-        'blockId' => $lastUndoItem['blockId'],
+        'act'      => 'delete',
+        'blockId'  => $lastUndoItem['blockId'],
         'bannerId' => $this->bannerId
       ]);
+      $undoFolder = $this->undoImagesFolder($lastUndoItem['id']);
+      if (file_exists($undoFolder)) {
+        Dir::move($undoFolder, $this->imagesFolder($lastUndoItem['blockId']));
+      }
     }
     // ============================================
     $this->db->query('DELETE FROM bcBlocks_undo_stack WHERE id=?', $lastUndoItem['id']);
@@ -255,7 +262,8 @@ SQL
       $orderKeys = unserialize($lastUndoItem['data']);
       $r['orderKeys'] = $orderKeys;
       $this->_updateOrder($orderKeys);
-    } elseif ($lastUndoItem['act'] == 'add') {
+    }
+    elseif ($lastUndoItem['act'] == 'add') {
       $this->db->query('DELETE FROM bcBlocks WHERE id=?', $lastUndoItem['blockId']);
     }
     else {
@@ -268,9 +276,24 @@ SQL
         $this->db->query('INSERT INTO bcBlocks SET ?a', $record);
       }
       else {
-        // act=update
-        $this->db->query('UPDATE bcBlocks SET orderKey=?, content=?, data=?, dateUpdate=? WHERE id=?', //
-          $lastUndoItem['orderKey'], $lastUndoItem['content'], $lastUndoItem['data'], $lastUndoItem['dateUpdate'], $lastUndoItem['blockId']);
+        // act = update
+        $r = $lastUndoItem;
+        unset($r['act']);
+        unset($r['id']);
+        unset($r['blockId']);
+        $this->db->update('bcBlocks', $lastUndoItem['blockId'], $r);
+        // images
+        $undoData = unserialize($lastUndoItem['data']);
+        if (empty($undoData['images'])) {
+          Dir::remove($this->imagesFolder($lastUndoItem['blockId']));
+        }
+        else {
+          $undoFolder = $this->undoImagesFolder($lastUndoItem['id']);
+          if (file_exists($undoFolder)) {
+            Dir::copy($this->imagesFolder($blockId), $this->redoImagesFolder($redoId));
+            Dir::copy($this->undoImagesFolder($lastUndoItem['id']), $this->imagesFolder($blockId));
+          }
+        }
       }
       $r = $this->getItemF($blockId);
       $r['act'] = $lastUndoItem['act'];
@@ -287,21 +310,22 @@ SQL
     if ($lastRedoItem['act'] == 'add' or $lastRedoItem['act'] == 'order') {
       unset($lastRedoItem['id']);
       $this->db->insert('bcBlocks_undo_stack', $lastRedoItem);
-    } else {
-      $this->db->query(<<<SQL
-INSERT INTO bcBlocks_undo_stack
-SELECT NULL, dateCreate, dateUpdate, orderKey, content, data, bannerId, userId,
-  "{$lastRedoItem['act']}" AS act,
-  id AS blockId
-FROM bcBlocks WHERE id=?d
-SQL
-        , $lastRedoItem['blockId']);
+    }
+    else {
+      $r = db()->selectRow('SELECT * FROM bcBlocks WHERE id=?d', $lastRedoItem['blockId']);
+      $r['blockId'] = $r['id'];
+      $r['act'] = $lastRedoItem['act'];
+      unset($r['id']);
+      $undoId = db()->insert('bcBlocks_undo_stack', $r);
     }
     if ($lastRedoItem['act'] == 'delete') {
       $r = [];
       $r['id'] = $lastRedoItem['blockId'];
       $r['act'] = $lastRedoItem['act'];
       $this->db->query('DELETE FROM bcBlocks WHERE id=?d', $lastRedoItem['blockId']);
+      if (file_exists($this->imagesFolder($lastRedoItem['blockId']))) {
+        Dir::move($this->imagesFolder($lastRedoItem['blockId']), $this->undoImagesFolder($undoId));
+      }
     }
     elseif ($lastRedoItem['act'] == 'order') {
       $orderKeys = unserialize($lastRedoItem['data']);
@@ -309,7 +333,8 @@ SQL
       $r = [];
       $r['act'] = 'order';
       $r['orderKeys'] = $orderKeys;
-    } else {
+    }
+    else {
       $blockId = $lastRedoItem['blockId'];
       $act = $lastRedoItem['act'];
       if ($lastRedoItem['act'] == 'add') {
@@ -325,6 +350,15 @@ SQL
         unset($lastRedoItem['blockId']);
         unset($lastRedoItem['act']);
         $this->db->update('bcBlocks', $lastRedoBlockId, $lastRedoItem);
+        // redo images
+        $data = unserialize($lastRedoItem['data']);
+        if (!empty($data['images'])) {
+          if (file_exists($this->redoImagesFolder($lastRedoItemId))) {
+            // copy current images to undo folder
+            Dir::copy($this->imagesFolder($blockId), $this->undoImagesFolder($undoId));
+            Dir::copy($this->redoImagesFolder($lastRedoItemId), $this->imagesFolder($blockId));
+          }
+        }
       }
       $r = $this->getItemF($blockId);
       $r['act'] = $act;
@@ -340,15 +374,72 @@ SQL
 
   function updateOrder(array $blockIdToOrderKey) {
     db()->insert('bcBlocks_undo_stack', [
-      'act' => 'order',
-      'data' => serialize($this->getCurrentOrderState()),
+      'act'      => 'order',
+      'data'     => serialize($this->getCurrentOrderState()),
       'bannerId' => $this->bannerId
     ]);
+    $this->_updateOrder($blockIdToOrderKey);
   }
 
   protected function _updateOrder(array $blockIdToOrderKey) {
     foreach ($blockIdToOrderKey as $blockId => $orderKey) {
       db()->query("UPDATE bcBlocks SET orderKey=?d WHERE id=?d", $orderKey, $blockId);
+    }
+  }
+
+  function updateMultiImages($blockId, $imageN, $uploadedFile) {
+    $block = $this->getItem($blockId);
+    // .......................
+    $images = empty($block['data']['images']) ? [] : $block['data']['images'];
+    $images[$imageN] = '/'.UPLOAD_DIR."/{$this->name}/multi".'/'.$blockId.'/'.$imageN.'.jpg';
+    output($images[$imageN]);
+    $this->update($blockId, [
+      'images' => $images
+    ], true);
+    // .......................
+    if (!empty($block['data']['images'])) {
+//      die2([
+//        filesize('C:/www/refactor/ngn-env/bc/lib/test.png'),
+//        filesize(WEBROOT_PATH.$block['data']['images'][0])
+//      ]);
+      $this->addUndoImages($this->undoId, $block['data']['images']);
+    }
+    // -----------------------
+    $file = Dir::make($this->imagesFolder($blockId)).'/'.$imageN.'.jpg';
+    copy($uploadedFile, $file);
+    // ..
+    return $images;
+  }
+
+  function imagesFolder($blockId) {
+    return UPLOAD_PATH."/{$this->name}/multi".'/'.$blockId;
+  }
+
+  function undoImagesFolder($undoId) {
+    Misc::checkEmpty($undoId);
+    return DATA_PATH.'/sdUndo/'.$this->bannerId.'/'.$undoId;
+  }
+
+  function redoImagesFolder($redoId) {
+    Misc::checkEmpty($redoId);
+    return DATA_PATH.'/sdRedo/'.$this->bannerId.'/'.$redoId;
+  }
+
+  protected function addUndoImages($undoId, $images) {
+    $currentUndoItemFolder = Dir::make($this->undoImagesFolder($undoId));
+    foreach ($images as $path) {
+      $newFile = $currentUndoItemFolder.'/'.basename($path);
+//      filesize(WEBROOT_PATH.$path),
+//      filesize(WEBROOT_PATH.$path)
+      copy(WEBROOT_PATH.$path, $newFile);
+    }
+  }
+
+
+  protected function redoImages($blockId, $undoId) {
+    $undoFolder = $this->undoImagesFolder($undoId);
+    if (file_exists($undoFolder)) {
+      Dir::copy($this->undoImagesFolder($undoId), $this->imagesFolder($blockId));
     }
   }
 
