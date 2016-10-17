@@ -1,5 +1,8 @@
 window.addEvent('sdPanelComplete', function() {
   Ngn.sd.btnUndo = new Ngn.Btn(Ngn.sd.fbtn(Locale.get('Sd.undo'), 'undo'), function() {
+    if (Ngn.sd.openedPropDialog) {
+      Ngn.sd.openedPropDialog.dialog.destroy();
+    }
     Ngn.Request.Iface.loading(true);
     new Ngn.Request.JSON({
       url: '/pageBlock/' + Ngn.sd.bannerId + '/json_undo',
@@ -21,6 +24,7 @@ window.addEvent('sdPanelComplete', function() {
               delete obj;
             } else {
               obj.update(data);
+              Ngn.sd.interface.bars.layersBar.reinit();
             }
           } else if (act == 'order') {
             Ngn.sd.interface.bars.layersBar.reorder(data.orderKeys);
@@ -42,6 +46,9 @@ window.addEvent('sdPanelComplete', function() {
 
 window.addEvent('sdPanelComplete', function() {
   Ngn.sd.btnRedo = new Ngn.Btn(Ngn.sd.fbtn(Locale.get('Sd.redo'), 'redo'), function() {
+    if (Ngn.sd.openedPropDialog) {
+      Ngn.sd.openedPropDialog.close();
+    }
     Ngn.Request.Iface.loading(true);
     new Ngn.Request.JSON({
       url: '/pageBlock/' + Ngn.sd.bannerId + '/json_redo',
@@ -59,6 +66,7 @@ window.addEvent('sdPanelComplete', function() {
             delete obj;
           } else if (act == 'update') {
             obj.update(data, false);
+            Ngn.sd.interface.bars.layersBar.reinit();
           } else if (act == 'order') {
             Ngn.sd.interface.bars.layersBar.reorder(data.orderKeys);
           } else {

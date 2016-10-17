@@ -1000,3 +1000,8 @@ max-height: 50px;
 .bannerBar .item.selected {
 border-color: #f00;
 }
+
+.element.type_image,
+.element.type_image input {
+font-size: 10px;
+}

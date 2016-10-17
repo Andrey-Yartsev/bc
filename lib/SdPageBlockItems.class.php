@@ -77,7 +77,7 @@ class SdPageBlockItems extends SdContainerItems {
     return false;
   }
 
-  protected $undoId;
+  public $lastUndoId;
 
   function update($id, array $data) {
     if (empty($data['images']) and !$this->dataHasChanged($id, $data)) return;
@@ -87,9 +87,7 @@ class SdPageBlockItems extends SdContainerItems {
     $r2['act'] = 'update';
     $r2['blockId'] = $r2['id'];
     unset($r2['id']);
-    LogWriter::v('undo', "add undo to stack $id");
-
-    $this->undoId = db()->insert('bcBlocks_undo_stack', $r2);
+    $this->lastUndoId = db()->insert('bcBlocks_undo_stack', $r2);
     db()->query('DELETE FROM bcBlocks_redo_stack WHERE bannerId=?', $this->bannerId);
     $this->_update($id, $data);
   }
@@ -148,7 +146,10 @@ class SdPageBlockItems extends SdContainerItems {
   }
 
   function getItemF($id) {
-    return $this->getItem($id)->prepareHtml($this->ownPageId)->r;
+    $item = $this->getItem($id)->prepareHtml($this->ownPageId)->r;
+    $item['dateCreate_tStamp'] = strtotime($item['dateCreate']);
+    $item['dateUpdate_tStamp'] = strtotime($item['dateUpdate']);
+    return $item;
   }
 
   function getItemE($id) {
@@ -283,16 +284,14 @@ class SdPageBlockItems extends SdContainerItems {
         unset($r['blockId']);
         $this->db->update('bcBlocks', $lastUndoItem['blockId'], $r);
         // images
-        $undoData = unserialize($lastUndoItem['data']);
-        if (empty($undoData['images'])) {
-          Dir::remove($this->imagesFolder($lastUndoItem['blockId']));
+        if (file_exists($this->imagesFolder($blockId))) {
+          Dir::copy($this->imagesFolder($blockId), $this->redoImagesFolder($redoId));
+        }
+        if (file_exists($this->undoImagesFolder($lastUndoItem['id']))) {
+          Dir::copy($this->undoImagesFolder($lastUndoItem['id']), $this->imagesFolder($blockId));
         }
         else {
-          $undoFolder = $this->undoImagesFolder($lastUndoItem['id']);
-          if (file_exists($undoFolder)) {
-            Dir::copy($this->imagesFolder($blockId), $this->redoImagesFolder($redoId));
-            Dir::copy($this->undoImagesFolder($lastUndoItem['id']), $this->imagesFolder($blockId));
-          }
+          Dir::remove($this->imagesFolder($lastUndoItem['blockId']));
         }
       }
       $r = $this->getItemF($blockId);
@@ -355,7 +354,9 @@ class SdPageBlockItems extends SdContainerItems {
         if (!empty($data['images'])) {
           if (file_exists($this->redoImagesFolder($lastRedoItemId))) {
             // copy current images to undo folder
-            Dir::copy($this->imagesFolder($blockId), $this->undoImagesFolder($undoId));
+            if (file_exists($this->imagesFolder($blockId))) {
+              Dir::copy($this->imagesFolder($blockId), Dir::make($this->undoImagesFolder($undoId)));
+            }
             Dir::copy($this->redoImagesFolder($lastRedoItemId), $this->imagesFolder($blockId));
           }
         }
@@ -389,25 +390,23 @@ class SdPageBlockItems extends SdContainerItems {
 
   function updateMultiImages($blockId, $imageN, $uploadedFile) {
     $block = $this->getItem($blockId);
-    // .......................
     $images = empty($block['data']['images']) ? [] : $block['data']['images'];
     $images[$imageN] = '/'.UPLOAD_DIR."/{$this->name}/multi".'/'.$blockId.'/'.$imageN.'.jpg';
-    output($images[$imageN]);
     $this->update($blockId, [
       'images' => $images
     ], true);
-    // .......................
     if (!empty($block['data']['images'])) {
-//      die2([
-//        filesize('C:/www/refactor/ngn-env/bc/lib/test.png'),
-//        filesize(WEBROOT_PATH.$block['data']['images'][0])
-//      ]);
-      $this->addUndoImages($this->undoId, $block['data']['images']);
+      $currentUndoItemFolder = Dir::make($this->undoImagesFolder($this->lastUndoId));
+      foreach ($images as $n => $path) {
+        // if exists current image with the same number as new, copy to undo folder
+        if (isset($block['data']['images'][$n])) {
+          $undoFile = $currentUndoItemFolder.'/'.basename($path);
+          copy(WEBROOT_PATH.$path, $undoFile);
+        }
+      }
     }
-    // -----------------------
     $file = Dir::make($this->imagesFolder($blockId)).'/'.$imageN.'.jpg';
     copy($uploadedFile, $file);
-    // ..
     return $images;
   }
 
@@ -425,21 +424,30 @@ class SdPageBlockItems extends SdContainerItems {
     return DATA_PATH.'/sdRedo/'.$this->bannerId.'/'.$redoId;
   }
 
-  protected function addUndoImages($undoId, $images) {
-    $currentUndoItemFolder = Dir::make($this->undoImagesFolder($undoId));
-    foreach ($images as $path) {
-      $newFile = $currentUndoItemFolder.'/'.basename($path);
-//      filesize(WEBROOT_PATH.$path),
-//      filesize(WEBROOT_PATH.$path)
-      copy(WEBROOT_PATH.$path, $newFile);
+  function deleteImage($blockId, $imageN) {
+    $block = $this->getItem($blockId);
+    $basePath = '/'.UPLOAD_DIR."/{$this->name}/multi/$blockId";
+    $folder = UPLOAD_PATH."/{$this->name}/multi/$blockId";
+    $images = $block['data']['images'];
+    unset($images[$imageN]);
+    $newImages = [];
+    for ($i = 0; $i < count($images); $i++) {
+      $newImages[] = $basePath."/$i.jpg";
     }
-  }
-
-
-  protected function redoImages($blockId, $undoId) {
-    $undoFolder = $this->undoImagesFolder($undoId);
-    if (file_exists($undoFolder)) {
-      Dir::copy($this->undoImagesFolder($undoId), $this->imagesFolder($blockId));
+    $this->update($blockId, ['images' => $newImages]);
+    // -- undo logic
+    Dir::copy( //
+      $this->imagesFolder($blockId), //
+      Dir::make($this->undoImagesFolder($this->lastUndoId)) //
+    );
+    // --
+    File::delete("$folder/$imageN.jpg");
+    $n = 0;
+    foreach (glob("$folder/*") as $file) {
+      if ($file != "$folder/$n.jpg") {
+        rename($file, "$folder/$n.jpg");
+      }
+      $n++;
     }
   }
 

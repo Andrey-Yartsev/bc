@@ -214,7 +214,7 @@ Ngn.sd.Items = new Class({
         //Ngn.sd.GlobalSlides.init(true);
         this.loading(false);
       }.bind(this)
-    }).send();
+    }).get();
   },
   id: function() {
     return this.data.id;
@@ -611,6 +611,9 @@ Ngn.sd.BlockB = new Class({
   updateOrder: function(orderKey) {
     if (orderKey !== undefined) this._data.orderKey = orderKey;
     this.el.setStyle('z-index', -this._data.orderKey + 100);
+  },
+  updateOrderOnDrag: function(orderKey) {
+    this.updateOrder(orderKey);
     window.fireEvent('sdBlockOrderChanged', this);
   },
   updateContent: function() {
@@ -773,7 +776,6 @@ Ngn.sd.BlockB = new Class({
     new Ngn.sd.BlockResize(this);
   },
   initDrag: function() {
-    console.trace('initDrag');
     //this.eDrag = Elements.from('<a class="btn control drag dragBox2" data-move="1" title="Передвинуть блок"></a>')[0].inject(this.eBtns, 'top');
     this.drag = new Ngn.sd.BlockDrag(this);
 //    return; 
