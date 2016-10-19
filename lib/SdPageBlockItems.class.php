@@ -291,7 +291,7 @@ class SdPageBlockItems extends SdContainerItems {
           Dir::copy($this->undoImagesFolder($lastUndoItem['id']), $this->imagesFolder($blockId));
         }
         else {
-          Dir::remove($this->imagesFolder($lastUndoItem['blockId']));
+          //Dir::remove($this->imagesFolder($lastUndoItem['blockId']));
         }
       }
       $r = $this->getItemF($blockId);

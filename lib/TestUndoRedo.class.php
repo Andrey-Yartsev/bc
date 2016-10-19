@@ -284,4 +284,21 @@ class TestUndoRedo extends ProjectTestCase {
     $this->assertTrue(filesize($r[0]) == $fs2);
   }
 
+  function testCreateImageRepositionUndo() {
+    $id = $this->create('animatedImage');
+    $this->blocks->updateMultiImages($id, 0, __DIR__.'/test.png');
+    $this->blocks->update($id, [
+      'type'     => 'animatedImage',
+      'position' => [
+        'x' => '1',
+        'y' => '1',
+      ],
+      'images'   => [
+        '/u/sd/pageBlocks/'.$this->bannerId.'/multi/'.$id.'/0.jpg',
+      ]
+    ]);
+    $this->blocks->undo();
+    $this->assertTrue(file_exists($this->blocks->imagesFolder($id).'/0.jpg'));
+  }
+
 }
