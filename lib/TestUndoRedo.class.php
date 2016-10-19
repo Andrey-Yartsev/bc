@@ -29,10 +29,10 @@ class TestUndoRedo extends ProjectTestCase {
     db()->query("DELETE FROM bcBlocks_undo_stack WHERE bannerId={$this->bannerId}");
   }
 
-  protected function create() {
+  protected function create($type = 'animatedText') {
     return $this->blocks->create([
       'data' => [
-        'type'     => 'animatedText',
+        'type'     => $type,
         'position' => [
           'x' => 0,
           'y' => 0
@@ -148,7 +148,7 @@ class TestUndoRedo extends ProjectTestCase {
   }
 
   function testUpdateImages() {
-    $id = $this->create();
+    $id = $this->create('animatedImage');
     $fs1 = filesize(__DIR__.'/test.png');
     $fs2 = filesize(__DIR__.'/test2.png');
     $this->blocks->updateMultiImages($id, 0, __DIR__.'/test.png');
@@ -230,7 +230,7 @@ class TestUndoRedo extends ProjectTestCase {
   }
 
   function testUndoRedoImages() {
-    $id = $this->create();
+    $id = $this->create('animatedImage');
     $this->blocks->updateMultiImages($id, 0, __DIR__.'/test.png');
     $this->blocks->undo();
     $this->blocks->redo();
@@ -238,7 +238,7 @@ class TestUndoRedo extends ProjectTestCase {
   }
 
   function testUndoRedoAnimatedImages() {
-    $id = $this->create();
+    $id = $this->create('animatedImage');
     $fs1 = filesize(__DIR__.'/test.png');
     $fs2 = filesize(__DIR__.'/test2.png');
     $fs3 = filesize(__DIR__.'/test3.png');
@@ -267,7 +267,7 @@ class TestUndoRedo extends ProjectTestCase {
  }
 
   function testUndoRedoAnimatedImagesDeletion() {
-    $id = $this->create();
+    $id = $this->create('animatedImage');
     $fs1 = filesize(__DIR__.'/test.png');
     $fs2 = filesize(__DIR__.'/test2.png');
     $this->blocks->updateMultiImages($id, 0, __DIR__.'/test.png');
