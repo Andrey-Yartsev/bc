@@ -301,4 +301,20 @@ class TestUndoRedo extends ProjectTestCase {
     $this->assertTrue(file_exists($this->blocks->imagesFolder($id).'/0.jpg'));
   }
 
+  function testSettings() {
+    $form = new BannerSettingsEditForm($this->bannerId);
+    $form->fromRequest = false;
+    $form->setElementsData([
+      'title' => 'dummy',
+      'size' => '200 x 200'
+    ]);
+    $form->update();
+    $this->blocks->undo();
+    $this->assertTrue(db()->getRow('bcBanners', $this->bannerId)['size'] == '125 x 125');
+    $this->blocks->redo();
+    $this->assertTrue(db()->getRow('bcBanners', $this->bannerId)['size'] == '200 x 200');
+    $this->blocks->undo();
+    $this->assertTrue(db()->getRow('bcBanners', $this->bannerId)['size'] == '125 x 125');
+  }
+
 }

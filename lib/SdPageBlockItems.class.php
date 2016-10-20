@@ -228,7 +228,17 @@ class SdPageBlockItems extends SdContainerItems {
     $lastUndoItem = $this->db->selectRow('SELECT * FROM bcBlocks_undo_stack WHERE bannerId=? ORDER BY id DESC LIMIT 1', $this->bannerId);
     if (!$lastUndoItem) return false;
     // ============================================
-    if ($lastUndoItem['act'] == 'order') {
+    if ($lastUndoItem['act'] == 'settings') {
+      $settings = unserialize($lastUndoItem['data']);
+      $this->db->insert('bcBlocks_redo_stack', [
+        'bannerId' => $this->bannerId,
+        'act'      => 'settings',
+        'data'     => serialize(db()->selectRow('SELECT size FROM bcBanners WHERE id=?d', $this->bannerId)),
+      ]);
+      db()->update('bcBanners', $this->bannerId, [
+        'size' => $settings['size']
+      ]);
+    } elseif ($lastUndoItem['act'] == 'order') {
       $r['act'] = 'order';
       $this->db->insert('bcBlocks_redo_stack', [
         'bannerId' => $this->bannerId,
@@ -267,7 +277,7 @@ class SdPageBlockItems extends SdContainerItems {
     elseif ($lastUndoItem['act'] == 'add') {
       $this->db->query('DELETE FROM bcBlocks WHERE id=?', $lastUndoItem['blockId']);
     }
-    else {
+    elseif ($lastUndoItem['act'] != 'settings') {
       $blockId = $lastUndoItem['blockId'];
       if ($lastUndoItem['act'] == 'delete') {
         $record = $lastUndoItem;
@@ -295,9 +305,9 @@ class SdPageBlockItems extends SdContainerItems {
         }
       }
       $r = $this->getItemF($blockId);
-      $r['act'] = $lastUndoItem['act'];
       $r['blockId'] = $blockId;
     }
+    $r['act'] = $lastUndoItem['act'];
     $r['lastItem'] = !(bool)$this->db->selectCell('SELECT COUNT(*) FROM bcBlocks_undo_stack WHERE bannerId=?', $this->bannerId);
     return $r;
   }
@@ -306,7 +316,8 @@ class SdPageBlockItems extends SdContainerItems {
     $lastRedoItem = $this->db->selectRow('SELECT * FROM bcBlocks_redo_stack WHERE bannerId=? ORDER BY id DESC LIMIT 1', $this->bannerId);
     if (!count($lastRedoItem)) return false;
     $lastRedoItemId = $lastRedoItem['id'];
-    if ($lastRedoItem['act'] == 'add' or $lastRedoItem['act'] == 'order') {
+    $act = $lastRedoItem['act'];
+    if ($lastRedoItem['act'] == 'add' or $lastRedoItem['act'] == 'order' or $lastRedoItem['act'] == 'settings') {
       unset($lastRedoItem['id']);
       $this->db->insert('bcBlocks_undo_stack', $lastRedoItem);
     }
@@ -326,7 +337,17 @@ class SdPageBlockItems extends SdContainerItems {
         Dir::move($this->imagesFolder($lastRedoItem['blockId']), $this->undoImagesFolder($undoId));
       }
     }
-    elseif ($lastRedoItem['act'] == 'order') {
+    elseif ($lastRedoItem['act'] == 'settings') {
+      $redoSettings = unserialize($lastRedoItem['data']);
+      $this->db->insert('bcBlocks_undo_stack', [
+        'bannerId' => $this->bannerId,
+        'act'      => 'settings',
+        'data'     => serialize(db()->selectRow('SELECT size FROM bcBanners WHERE id=?d', $this->bannerId))
+      ]);
+      db()->update('bcBanners', $this->bannerId, [
+        'size' => $redoSettings['size']
+      ]);
+    } elseif ($lastRedoItem['act'] == 'order') {
       $orderKeys = unserialize($lastRedoItem['data']);
       $this->_updateOrder($orderKeys);
       $r = [];
@@ -335,7 +356,6 @@ class SdPageBlockItems extends SdContainerItems {
     }
     else {
       $blockId = $lastRedoItem['blockId'];
-      $act = $lastRedoItem['act'];
       if ($lastRedoItem['act'] == 'add') {
         $lastRedoItem['id'] = $lastRedoItem['blockId'];
         unset($lastRedoItem['blockId']);
@@ -362,9 +382,9 @@ class SdPageBlockItems extends SdContainerItems {
         }
       }
       $r = $this->getItemF($blockId);
-      $r['act'] = $act;
     }
     $this->db->query('DELETE FROM bcBlocks_redo_stack WHERE id=?', $lastRedoItemId);
+    $r['act'] = $act;
     $r['lastItem'] = !(bool)$this->db->selectCell('SELECT COUNT(*) FROM bcBlocks_redo_stack WHERE bannerId=?', $this->bannerId);
     return $r;
   }

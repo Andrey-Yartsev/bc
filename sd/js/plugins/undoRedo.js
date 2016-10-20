@@ -69,8 +69,10 @@ window.addEvent('sdPanelComplete', function() {
             Ngn.sd.interface.bars.layersBar.reinit();
           } else if (act == 'order') {
             Ngn.sd.interface.bars.layersBar.reorder(data.orderKeys);
+          } else if (act == 'settings') {
+            Ngn.sd.init(Ngn.sd.bannerId);
           } else {
-            // act = delete
+            // act = create
             Ngn.sd.createBlockDefault(data);
           }
           if (data.lastItem) {
