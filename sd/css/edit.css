@@ -975,30 +975,44 @@ background-image: url(/i/img/white/arrow-up.png);
 }
 .bannerBar .item {
 display: block;
-border: 2px solid #ccc;
+border: 1px solid #555;
 width: 50px;
 height: 50px;
 margin-left: 20px;
 margin-top: 30px;
 float: left;
 background: #000;
+position: relative;
 }
-
 .bannerBar a.item {
 color: #ccc;
 text-decoration: none;
 text-align: center;
-font-size: 10px;
+font-size: 9px;
 overflow: hidden;
+background: #000;
 }
 .bannerBar .item div {
-margin-top: 12px;
+margin-top: 14px;
 }
 .bannerBar .item img {
-max-height: 50px;
+max-height: 50px;   
 }
+.bannerBar .item img,
+.bannerBar .item div {
+opacity: 0.5;
+}
+.bannerBar .item:hover {
+border-color: #ccc;
+}
+
 .bannerBar .item.selected {
-border-color: #f00;
+border-color: #00AEEF;
+
+}
+.bannerBar .item:hover img,
+.bannerBar .item:hover div {
+opacity: 1;
 }
 
 .element.type_image,
