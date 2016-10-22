@@ -418,10 +418,19 @@ class SdPageBlockItems extends SdContainerItems {
   function updateMultiImages($blockId, $imageN, $uploadedFile) {
     $block = $this->getItem($blockId);
     $images = empty($block['data']['images']) ? [] : $block['data']['images'];
-    $images[$imageN] = '/'.UPLOAD_DIR."/{$this->name}/multi".'/'.$blockId.'/'.$imageN.'.jpg';
-    $this->update($blockId, [
-      'images' => $images
-    ], true);
+    $filename = "{$this->name}/multi".'/'.$blockId.'/'.$imageN.'.jpg';
+    $images[$imageN] = '/'.UPLOAD_DIR.'/'.$filename;
+    $newData = ['images' => $images];
+    // if this is a new first image add size in data
+    if (empty($block['data']['images']) and $imageN == 0) {
+      list($w, $h) = getimagesize($uploadedFile);
+      $newData['size'] = [
+        'w' => $w,
+        'h' => $h
+      ];
+    }
+    // -----
+    $this->update($blockId, $newData, true);
     if (!empty($block['data']['images'])) {
       $currentUndoItemFolder = Dir::make($this->undoImagesFolder($this->lastUndoId));
       foreach ($images as $n => $path) {
