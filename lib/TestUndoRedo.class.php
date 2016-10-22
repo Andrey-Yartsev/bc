@@ -130,23 +130,6 @@ class TestUndoRedo extends ProjectTestCase {
     $this->assertTrue((bool)db()->selectRow('SELECT * FROM bcBlocks WHERE id=?d', $id), 'item exists');
   }
 
-  function testOrderUndoRedo() {
-    $id1 = $this->create();
-    $id2 = $this->create();
-    $r1 = db()->selectCol("SELECT id AS ARRAY_KEY, orderKey FROM bcBlocks WHERE id IN ($id1, $id2)");
-    $newOrder = [
-      $id1 => '1',
-      $id2 => '2'
-    ];
-    $this->blocks->updateOrder($newOrder);
-    $this->blocks->undo();
-    $r2 = db()->selectCol("SELECT id AS ARRAY_KEY, orderKey FROM bcBlocks WHERE id IN ($id1, $id2)");
-    $this->assertTrue($r1 === $r2);
-    $this->blocks->redo();
-    $r2 = db()->selectCol("SELECT id AS ARRAY_KEY, orderKey FROM bcBlocks WHERE id IN ($id1, $id2)");
-    $this->assertTrue($r2 === $newOrder);
-  }
-
   function testUpdateImages() {
     $id = $this->create('animatedImage');
     $fs1 = filesize(__DIR__.'/test.png');
@@ -315,6 +298,61 @@ class TestUndoRedo extends ProjectTestCase {
     $this->assertTrue(db()->getRow('bcBanners', $this->bannerId)['size'] == '200 x 200');
     $this->blocks->undo();
     $this->assertTrue(db()->getRow('bcBanners', $this->bannerId)['size'] == '125 x 125');
+  }
+
+  function testOrderUndoRedo() {
+    $id1 = $this->create();
+    $id2 = $this->create();
+    $r1 = db()->selectCol("SELECT id AS ARRAY_KEY, orderKey FROM bcBlocks WHERE id IN ($id1, $id2)");
+    $newOrder = [
+      $id1 => '1',
+      $id2 => '2'
+    ];
+    $this->blocks->updateOrder($newOrder);
+    $this->blocks->undo();
+    $r2 = db()->selectCol("SELECT id AS ARRAY_KEY, orderKey FROM bcBlocks WHERE id IN ($id1, $id2)");
+    $this->assertTrue($r1 === $r2);
+    $this->blocks->redo();
+    $r2 = db()->selectCol("SELECT id AS ARRAY_KEY, orderKey FROM bcBlocks WHERE id IN ($id1, $id2)");
+    $this->assertTrue($r2 === $newOrder);
+  }
+
+  // new tools for testing
+
+  protected $blockId1, $blockId2;
+  protected function createBlocks() {
+    $this->blockId1 = $this->create();
+    $this->blockId2 = $this->create();
+  }
+  protected function reorder() {
+    $order = [
+      $this->blockId1 => '1',
+      $this->blockId2 => '2',
+    ];
+    $this->blocks->updateOrder($order);
+    return $order;
+  }
+  protected function move() {
+    $this->blocks->update($this->blockId2, [
+      'position' => [
+        'x' => '1',
+        'y' => '1',
+      ],
+    ]);
+  }
+  protected function getLastUndo() {
+    return unserialize(db()->selectRow("SELECT * FROM bcBlocks_undo_stack ORDER BY id DESC LIMIT 1")['data']);
+  }
+
+  function testOrderUndoRedo2() {
+    $this->createBlocks();
+    $initOrder = $this->blocks->getOrder();
+    $this->reorder();
+    $this->blocks->undo();
+    $this->blocks->redo();
+    $this->assertTrue($this->getLastUndo() == $initOrder);
+    $this->blocks->undo();
+    $this->assertTrue($this->blocks->getOrder() == $initOrder);
   }
 
 }

@@ -243,7 +243,7 @@ class SdPageBlockItems extends SdContainerItems {
       $this->db->insert('bcBlocks_redo_stack', [
         'bannerId' => $this->bannerId,
         'act'      => 'order',
-        'data'     => serialize($this->getCurrentOrderState())
+        'data'     => serialize($this->getOrder())
       ]);
     }
     elseif ($lastUndoItem['act'] != 'delete') {
@@ -317,9 +317,16 @@ class SdPageBlockItems extends SdContainerItems {
     if (!count($lastRedoItem)) return false;
     $lastRedoItemId = $lastRedoItem['id'];
     $act = $lastRedoItem['act'];
-    if ($lastRedoItem['act'] == 'add' or $lastRedoItem['act'] == 'order' or $lastRedoItem['act'] == 'settings') {
+    if ($lastRedoItem['act'] == 'add'  or $lastRedoItem['act'] == 'settings') {
       unset($lastRedoItem['id']);
       $this->db->insert('bcBlocks_undo_stack', $lastRedoItem);
+    }
+    elseif ($lastRedoItem['act'] == 'order') {
+      db()->insert('bcBlocks_undo_stack', [
+        'act' => 'order',
+        'bannerId' => $this->bannerId,
+        'data' => serialize($this->getOrder())
+      ]);
     }
     else {
       $r = db()->selectRow('SELECT * FROM bcBlocks WHERE id=?d', $lastRedoItem['blockId']);
@@ -389,14 +396,14 @@ class SdPageBlockItems extends SdContainerItems {
     return $r;
   }
 
-  protected function getCurrentOrderState() {
+  function getOrder() {
     return db()->selectCol("SELECT id AS ARRAY_KEY, orderKey FROM bcBlocks WHERE bannerId=?d", $this->bannerId);
   }
 
   function updateOrder(array $blockIdToOrderKey) {
     db()->insert('bcBlocks_undo_stack', [
       'act'      => 'order',
-      'data'     => serialize($this->getCurrentOrderState()),
+      'data'     => serialize($this->getOrder()),
       'bannerId' => $this->bannerId
     ]);
     $this->_updateOrder($blockIdToOrderKey);
