@@ -27,12 +27,22 @@ Ngn.sd.LayersBar = new Class({
   },
   initSortables: function() {
     var obj = this;
+
     new Sortables(this.eLayers, {
       onStart: function(eMovingLayer) {
+        this.startIds = this.serialize(0, function(element) {
+          return element.get('data-id');
+        }).filter(function(item) {
+          return item !== null;
+        });
+
         eMovingLayer.addClass('drag');
       },
       onComplete: function(eMovingLayer) {
-        Ngn.Request.Iface.loading(false);
+        if (!this.startIds) {
+          // no dragging
+          return;
+        }
         eMovingLayer.removeClass('drag');
         var ePrevLayer;
         var id = eMovingLayer.get('data-id');
@@ -51,13 +61,17 @@ Ngn.sd.LayersBar = new Class({
         var ids = this.serialize(0, function(element) {
           return element.get('data-id');
         });
+        if (ids.join('') === this.startIds.join('')) {
+          // no changes
+          return;
+        }
         Ngn.sd.blocks[id].updateOrderOnDrag(obj.flip(ids));
         Ngn.Request.Iface.loading(true);
         new Ngn.Request({
           url: '/pageBlock/' + Ngn.sd.bannerId + '/json_updateOrder',
           onComplete: function() {
             Ngn.Request.Iface.loading(false);
-          },
+          }
         }).post({
             ids: ids
           });
