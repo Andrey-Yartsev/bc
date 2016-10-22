@@ -32,6 +32,7 @@ Ngn.sd.LayersBar = new Class({
         eMovingLayer.addClass('drag');
       },
       onComplete: function(eMovingLayer) {
+        Ngn.Request.Iface.loading(false);
         eMovingLayer.removeClass('drag');
         var ePrevLayer;
         var id = eMovingLayer.get('data-id');
@@ -51,8 +52,12 @@ Ngn.sd.LayersBar = new Class({
           return element.get('data-id');
         });
         Ngn.sd.blocks[id].updateOrderOnDrag(obj.flip(ids));
+        Ngn.Request.Iface.loading(true);
         new Ngn.Request({
-          url: '/pageBlock/' + Ngn.sd.bannerId + '/json_updateOrder'
+          url: '/pageBlock/' + Ngn.sd.bannerId + '/json_updateOrder',
+          onComplete: function() {
+            Ngn.Request.Iface.loading(false);
+          },
         }).post({
             ids: ids
           });
