@@ -806,12 +806,14 @@ Ngn.sd.BlockB = new Class({
   },
   _resizeEl: function(el, size) {
     if (size.w) {
+      size.w = parseInt(size.w);
       el.sdSetStyle('width', size.w + 'px');
     }
     else if (size.w === '') {
       el.sdSetStyle('width', '');
     }
     if (size.h) {
+      size.h = parseInt(size.h);
       el.sdSetStyle('height', size.h + 'px');
     } else if (size.h === '') {
       el.sdSetStyle('height', '');
